@@ -25,6 +25,7 @@ struct _SeafRepo {
     gboolean    no_local_history;
 
     SeafBranch *head;
+    gchar root_id[41];
 
     gboolean    is_corrupted;
     gboolean    delete_pending;

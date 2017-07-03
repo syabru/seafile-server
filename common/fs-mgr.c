@@ -2492,6 +2492,38 @@ count_dir_files (SeafFSManager *mgr, const char *repo_id, int version, const cha
     return count;
 }
 
+static int
+get_file_count_info (SeafFSManager *mgr,
+                     const char *repo_id,
+                     int version,
+                     const char *id,
+                     gint64 *dir_count,
+                     gint64 *file_count)
+{
+    SeafDir *dir;
+    SeafDirent *seaf_dent;
+    GList *p;
+    int ret = 0;
+
+    dir = seaf_fs_manager_get_seafdir (mgr, repo_id, version, id);
+    if (!dir)
+        return -1;
+
+    for (p = dir->entries; p; p = p->next) {
+        seaf_dent = (SeafDirent *)p->data;
+
+        if (S_ISREG(seaf_dent->mode)) {
+            (*file_count)++;
+        } else if (S_ISDIR(seaf_dent->mode)) {
+            (*dir_count)++;
+            ret = get_file_count_info (mgr, repo_id, version, seaf_dent->id, dir_count, file_count);
+        }
+    }
+    seaf_dir_free (dir);
+
+    return ret;
+}
+
 int
 seaf_fs_manager_count_fs_files (SeafFSManager *mgr,
                                 const char *repo_id,
@@ -3034,4 +3066,50 @@ seaf_fs_manager_remove_store (SeafFSManager *mgr,
                               const char *store_id)
 {
     return seaf_obj_store_remove_store (mgr->obj_store, store_id);
+}
+
+GObject *
+seaf_fs_manager_get_file_count_info_by_path (SeafFSManager *mgr,
+                                             const char *repo_id,
+                                             const char *path,
+                                             GError **error)
+{
+    SeafRepo *repo = NULL;
+    char *dir_id = NULL;
+    gint64 file_count = 0, dir_count = 0;
+    SeafileFileCountInfo *info = NULL;
+
+    repo = seaf_repo_manager_get_repo (seaf->repo_mgr, repo_id);
+    if (!repo) {
+        seaf_warning ("Failed to get repo %.10s\n", repo_id);
+        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_GENERAL,
+                     "Library not exists");
+        return NULL;
+    }
+
+    dir_id = seaf_fs_manager_get_seafdir_id_by_path (mgr,
+                                                     repo->store_id,
+                                                     repo->version,
+                                                     repo->root_id,
+                                                     path, NULL);
+    if (!dir_id) {
+        seaf_warning ("Path %s doesn't exist or is not a dir in repo %.10s.\n",
+                      path, repo_id);
+        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS, "Bad path");
+        goto out;
+    }
+    if (get_file_count_info (mgr, repo_id, repo->version,
+                             dir_id, &dir_count, &file_count) < 0) {
+        seaf_warning ("Failed to get count info from path %s in repo %.10s.\n",
+                      path, repo_id);
+        goto out;
+    }
+    info = g_object_new (SEAFILE_TYPE_FILE_COUNT_INFO,
+                         "file_count", file_count,
+                         "dir_count", dir_count, NULL);
+out:
+    seaf_repo_unref (repo);
+    g_free (dir_id);
+
+    return (GObject *)info;
 }

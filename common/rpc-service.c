@@ -5069,4 +5069,18 @@ seafile_get_total_storage (GError **error)
     return seaf_get_total_storage (error);
 }
 
+GObject *
+seafile_get_file_count_info_by_path (const char *repo_id,
+                                     const char *path,
+                                     GError **error)
+{
+    printf("seafile_get_file_count_info_by_path has been called\n");
+    if (!repo_id || !path) {
+        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS, "Argument should not be null");
+        return NULL;
+    }
+
+    return seaf_fs_manager_get_file_count_info_by_path (seaf->fs_mgr, repo_id, path, error);
+}
+
 #endif  /* SEAFILE_SERVER */
